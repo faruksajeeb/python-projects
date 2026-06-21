@@ -9,6 +9,9 @@ from app.database import Base, get_db
 from app.main import app
 
 
+# =========================
+# TEST DATABASE
+# =========================
 TEST_DATABASE_URL = "sqlite:///./test.db"
 
 engine = create_engine(
@@ -22,12 +25,17 @@ TestingSessionLocal = sessionmaker(
     autoflush=False
 )
 
+
+# Create tables before tests
+Base.metadata.drop_all(bind=engine)
 Base.metadata.create_all(bind=engine)
 
 
+# =========================
+# OVERRIDE DB DEPENDENCY
+# =========================
 def override_get_db():
     db = TestingSessionLocal()
-
     try:
         yield db
     finally:
@@ -37,6 +45,53 @@ def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 
-@pytest.fixture
+# =========================
+# TEST CLIENT FIXTURE
+# =========================
+@pytest.fixture(scope="session")
 def client():
-    yield TestClient(app)
+    with TestClient(app) as c:
+        yield c
+
+
+# =========================
+# CLEAN DB BETWEEN TESTS
+# =========================
+@pytest.fixture(autouse=True)
+def clean_db():
+    """
+    Ensures each test runs with clean database state
+    """
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+# =========================
+# AUTH FIXTURES (IMPORTANT)
+# =========================
+@pytest.fixture
+def auth_token(client):
+    # register user
+    client.post("/auth/register", json={
+        "username": "testuser",
+        "password": "testpass"
+    })
+
+    # login user (IMPORTANT: form-data)
+    response = client.post(
+        "/auth/login",
+        data={
+            "username": "testuser",
+            "password": "testpass"
+        }
+    )
+
+    return response.json()["access_token"]
+
+
+@pytest.fixture
+def auth_headers(auth_token):
+    return {
+        "Authorization": f"Bearer {auth_token}"
+    }
