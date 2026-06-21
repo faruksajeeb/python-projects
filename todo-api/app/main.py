@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.database import engine, Base
 from app.routers.todo import router as todo_router
+from app.routers import todo, auth
 
 from app.models import todo  # IMPORTANT: register model
 
@@ -13,3 +14,4 @@ app = FastAPI(title="Todo API")
 def home():
     return "Hello World";
 app.include_router(todo_router)
+app.include_router(auth.router)
